@@ -3,14 +3,14 @@ close all
 
 fs = 1000;          % Sampling frequency (Hz)
 T = 1/fs;           
-numSymbols = 200;    % Increased for better lock visualization
-sps = 8;            % Samples per symbol
+numSymbols = 100;    % Increased for better lock visualization
+sps = 1;            % Samples per symbol
 symRate = fs/sps;    % Symbol rate (1000 Baud)
 
 preamble = [-1 -1 -1 -1 -1 +1 +1 -1 -1 +1 -1 +1 -1]';
 
 t = (0:numSymbols + length(preamble)-1)'*T;
-freq_offset = 20;    % 15 Hz offset
+freq_offset = 15;    % 15 Hz offset
 phase_offset = pi/4; % 45 degrees initial phase
 N = 100;
 phi0 = zeros(N, 1);
@@ -23,20 +23,33 @@ input_signal = awgn(input_signal, 30);
 [SyncedData, dw(i), phi0(i)] = dataAidedSync_symbol_sync(input_signal);
 
 end
+
+variance = var(dw*fs/(2*pi))
+
 figure;
 subplot(2,1,1)
-plot(phi0)
-yline(phase_offset)
+plot(phi0, LineWidth=2)
+yline(phase_offset, LineWidth=1.5)
 title("Computed phase offset vs phase offset")
 xlabel("Run number")
 ylabel("Phase offset [rad]")
-subplot(2,1,2)
-plot(dw*fs/(2*pi))
-yline(freq_offset)
+ax = gca();
+ax.FontSize = 20;
+annotation('textbox',[.2 .5 .3 .3],'String',"Actual phase offset = \pi/4",'FitBoxToText','on');
+ax2 = subplot(2,1,2);
+plot(dw*fs/(2*pi), LineWidth=2)
+yline(freq_offset, LineWidth=1.5)
+ax = gca();
+ax.FontSize = 20;
+pos = get(ax2, 'Position');
+x_pos = pos(1) + 0.45; % Slightly right of the subplot's right edge
+y_pos = pos(2) + pos(4) - 0.15; % Slightly below the subplot's top edge
+width = 0.2;
+height = 0.1;
 title("Computed frequency offset vs frequency offset")
 xlabel("Run number")
 ylabel("Frequency offset [Hz]")
-
+annotation('textbox',[x_pos, y_pos, width, height],'String',"Variance = " + variance + ", Actual frequency offset = " + freq_offset + " [Hz]",'FitBoxToText','on');
 
 constDiagram = comm.ConstellationDiagram( ...
     SamplesPerSymbol=sps, ...

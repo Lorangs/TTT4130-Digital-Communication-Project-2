@@ -3,18 +3,18 @@ clear all; close all;
 %% 1. System Parameters
 fs = 10000;          % Sampling frequency (Hz)
 T = 1/fs;           
-numSymbols = 500;    % Increased for better lock visualization
-sps = 10;            % Samples per symbol
+numSymbols = 100;    % Increased for better lock visualization
+sps = 8;            % Samples per symbol
 symRate = fs/sps;    % Symbol rate (1000 Baud)
 alpha = 0.5;         % Roll-off factor
-filterLenSymbols = 8;
+fls = 10;             % Filter length in symbols
 
 % Generate Random BPSK Data
-data = sign(randn(numSymbols, 1));
+data = [sign(randn(numSymbols, 1))];
 
 % RRC Transmit Filter
 txFilter = comm.RaisedCosineTransmitFilter(...
-    "FilterSpanInSymbols", filterLenSymbols, ...
+    "FilterSpanInSymbols", fls, ...
     "RolloffFactor", alpha, "OutputSamplesPerSymbol", sps);
 data_upsampled = txFilter(data);
 
@@ -27,7 +27,7 @@ input_signal = data_upsampled .* exp(1i*(2*pi*freq_offset*t + phase_offset));
 %% 2. Receiver: Matched Filtering (RRC Receive Filter)
 % It is crucial to filter BEFORE the loop to minimize ISI
 rxFilter = comm.RaisedCosineReceiveFilter(...
-    "FilterSpanInSymbols", filterLenSymbols, ...
+    "FilterSpanInSymbols", fls, ...
     "RolloffFactor", alpha, "InputSamplesPerSymbol", sps, ...
     "DecimationFactor", 1);
 received_filtered = rxFilter(input_signal);
