@@ -1,5 +1,67 @@
-function syncdSymOut = dataAidedSync(symIn)
+clear all
+close all
 
+fs = 1000;          % Sampling frequency (Hz)
+T = 1/fs;           
+numSymbols = 100;    % Increased for better lock visualization
+sps = 1;            % Samples per symbol
+symRate = fs/sps;    % Symbol rate (1000 Baud)
+
+preamble = [-1 -1 -1 -1 -1 +1 +1 -1 -1 +1 -1 +1 -1]';
+
+t = (0:numSymbols + length(preamble)-1)'*T;
+freq_offset = 15;    % 15 Hz offset
+phase_offset = pi/4; % 45 degrees initial phase
+N = 300;
+phi0 = zeros(N, 1);
+dw = zeros(N,1);
+SNR_vec = 0:0.5:30;
+SNR_lin_vec = 10.^(SNR_vec./10);
+variance_f = zeros(length(SNR_vec),1);
+variance_phi = zeros(length(SNR_vec),1);
+MCRB_f = (3/(8*(pi^2)*(length(preamble)^3)*T^2))./(SNR_lin_vec);
+MCRB_phi = (1/(2*(length(preamble))))./(SNR_lin_vec);
+for j = 1:length(SNR_lin_vec)
+for i = 1:N
+    data = [preamble; sign(randn(numSymbols, 1))];
+    input_signal = data .* exp(1i*(2*pi*freq_offset*t + phase_offset));
+    w_offset = 2*pi*freq_offset;
+    input_signal = awgn(input_signal, SNR_vec(j));
+    [SyncedData, dw(i), phi0(i)] = dataAidedSync_symbol_sync(input_signal);
+    
+end
+    variance_f(j) = var(dw*fs/(2*pi));
+    variance_phi(j) = var(phi0);
+
+end
+
+figure
+subplot(2,1,1)
+semilogy(SNR_vec, variance_f, LineWidth=1.5, DisplayName="Computed variance")
+hold on
+grid on
+semilogy(SNR_vec, MCRB_f, LineWidth=1.5, DisplayName="MCRB")
+legend
+title("Frequency variance")
+xlabel("SNR [dB]")
+ylabel("Var[\Delta f]")
+ax = gca();
+ax.FontSize = 20;
+subplot(2,1,2)
+
+semilogy(SNR_vec, variance_phi, LineWidth=1.5, DisplayName="Computed variance")
+hold on
+semilogy(SNR_vec, MCRB_phi, LineWidth=1.5, DisplayName="MCRB")
+grid on
+legend
+xlabel("SNR [dB]")
+ylabel("Var[\Delta \phi]")
+title("Phase variance")
+ax = gca();
+ax.FontSize = 20;
+
+
+function [syncdSymOut, corr_freq , phi0] = dataAidedSync_symbol_sync(symIn) 
 % Data aided sync using samples after symbol synchronization
 % Optimized for a single 13-bit Barker sequence using Kay's Estimator
 
@@ -59,6 +121,7 @@ t_preamb = (0:L-1).';
 z_corrected = z .* exp(-1j * cfo_est * t_preamb);
 phi0 = mean(angle(z_corrected));
 
+corr_freq = cfo_est;
 % --- 5. DATA CORRECTION ---
 % Define indices for the data portion strictly AFTER the preamble
 idx_data = (offset + L + 1 : length(symIn)).';

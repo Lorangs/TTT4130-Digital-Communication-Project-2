@@ -12,7 +12,7 @@ preamble = [-1 -1 -1 -1 -1 +1 +1 -1 -1 +1 -1 +1 -1]';
 t = (0:numSymbols + length(preamble)-1)'*T;
 freq_offset = 15;    % 15 Hz offset
 phase_offset = pi/4; % 45 degrees initial phase
-N = 100;
+N = 300;
 phi0 = zeros(N, 1);
 dw = zeros(N,1);
 for i = 1:N
@@ -24,20 +24,23 @@ input_signal = awgn(input_signal, 30);
 
 end
 
-variance = var(dw*fs/(2*pi))
+variance_f = var(dw*fs/(2*pi))
+variance_phi = var(phi0)
 
 figure;
 subplot(2,1,1)
 plot(phi0, LineWidth=2)
 yline(phase_offset, LineWidth=1.5)
 title("Computed phase offset vs phase offset")
-xlabel("Run number")
+xlabel("Frame number")
 ylabel("Phase offset [rad]")
 ax = gca();
 ax.FontSize = 20;
-annotation('textbox',[.2 .5 .3 .3],'String',"Actual phase offset = \pi/4",'FitBoxToText','on');
+annotation('textbox',[.2 .5 .3 .3],'String',"Variance = " + variance_phi + " Actual phase offset = \pi/4",'FitBoxToText','on');
+plotedit on;
 ax2 = subplot(2,1,2);
 plot(dw*fs/(2*pi), LineWidth=2)
+plotedit on;
 yline(freq_offset, LineWidth=1.5)
 ax = gca();
 ax.FontSize = 20;
@@ -47,9 +50,9 @@ y_pos = pos(2) + pos(4) - 0.15; % Slightly below the subplot's top edge
 width = 0.2;
 height = 0.1;
 title("Computed frequency offset vs frequency offset")
-xlabel("Run number")
+xlabel("Frame number")
 ylabel("Frequency offset [Hz]")
-annotation('textbox',[x_pos, y_pos, width, height],'String',"Variance = " + variance + ", Actual frequency offset = " + freq_offset + " [Hz]",'FitBoxToText','on');
+annotation('textbox',[x_pos, y_pos, width, height],'String',"Variance = " + variance_f + ", Actual frequency offset = " + freq_offset + " [Hz]",'FitBoxToText','on');
 
 constDiagram = comm.ConstellationDiagram( ...
     SamplesPerSymbol=sps, ...
@@ -59,16 +62,20 @@ constDiagram = comm.ConstellationDiagram( ...
 constDiagram(SyncedData)
 
 figure;
-subplot(2,1,1)
+subplot(1,2,1)
 scatter(real(input_signal),imag(input_signal))
 title("Received symbols")
-subplot(2,1,2)
+grid on
+subplot(1,2,2)
 scatter(real(SyncedData), imag(SyncedData))
 title("Synchronized symbols")
+xlim([-1.2 1.2])
+ylim([-1.2 1.2])
+grid on
 %dataAidedSync(testSym.')
 
 
-function [syncdSymOut, dw, phi0] = dataAidedSync_symbol_sync(symIn) 
+function [syncdSymOut, corr_freq , phi0] = dataAidedSync_symbol_sync(symIn) 
 % Data aided sync using samples after symbol synchronization
 % Optimized for a single 13-bit Barker sequence using Kay's Estimator
 
@@ -76,10 +83,6 @@ persistent cfo_est
 % Lower alpha means more smoothing. If CFO changes rapidly, increase this.
 % If CFO is relatively stable, a smaller alpha (e.g., 0.1 to 0.3) helps hide the 13-bit noise.
 alpha = 0.5; 
-
-if isempty(cfo_est)
-    cfo_est = 0;
-end
 
 % Single 13-bit Barker sequence
 preamble = [-1 -1 -1 -1 -1 +1 +1 -1 -1 +1 -1 +1 -1].';
@@ -119,15 +122,20 @@ dw = sum(weights .* angles);
 
 % --- 3. APPLY SMOOTHING ---
 % Update the persistent variable
-cfo_est = dw * alpha + (1 - alpha) * cfo_est;
+if isempty(cfo_est)
+    cfo_est = dw;
+else
+    cfo_est = dw * alpha + (1 - alpha) * cfo_est;
+end
 
 % --- 4. PHASE ESTIMATION ---
 % Remove the estimated frequency offset from the preamble to find the static phase offset.
 % IMPORTANT: Use the smoothed cfo_est here, not the instantaneous dw.
 t_preamb = (0:L-1).';
 z_corrected = z .* exp(-1j * cfo_est * t_preamb);
-phi0 = angle(sum(z_corrected));
+phi0 = mean(angle(z_corrected));
 
+corr_freq = cfo_est;
 % --- 5. DATA CORRECTION ---
 % Define indices for the data portion strictly AFTER the preamble
 idx_data = (offset + L + 1 : length(symIn)).';

@@ -10,7 +10,7 @@ alpha = 0.5;         % Roll-off factor
 fls = 10;             % Filter length in symbols
 
 % Generate Random BPSK Data
-data = [sign(randn(numSymbols, 1))];
+data = [sign(randn(numSymbols -13, 1)) ];
 
 % RRC Transmit Filter
 txFilter = comm.RaisedCosineTransmitFilter(...
@@ -31,13 +31,13 @@ rxFilter = comm.RaisedCosineReceiveFilter(...
     "RolloffFactor", alpha, "InputSamplesPerSymbol", sps, ...
     "DecimationFactor", 1);
 received_filtered = rxFilter(input_signal);
-
+received_filtered = received_filtered(2*fls+1:end);
 %% 3. Costas Loop Implementation
 % Loop Design Parameters
 loop_bw = 0.02 * symRate; % Normalized Loop Bandwidth
 zeta = 0.707;             % Damping factor (critically damped)
 kpd = 1;                  % Phase Detector Gain (assuming AGC is used)
-k0 = 1;                   % VCO Gain
+k0 = 1;                   % VCO/NCO Gain
 
 % Calculating PI Controller Gains
 wn = (4 * loop_bw * zeta) / (zeta + 1/(4*zeta));
@@ -75,17 +75,14 @@ for n = 1:length(received_filtered)
     error_track(n) = error;
 end
 
+
 %% 4. Visualization
 figure('Name', 'Costas Loop Performance');
-subplot(2,1,1); 
-plot(error_track); 
+plot(error_track, "LineWidth",1.5); 
 title('Phase Error (Discriminator Output)'); 
 xlabel('Samples'); ylabel('Error'); grid on;
-
-subplot(2,1,2); 
-plot(recovered_I); 
-title('Recovered In-Phase Signal (Baseband)'); 
-xlabel('Samples'); ylabel('Amplitude'); grid on;
+ax = gca();
+ax.FontSize = 20;
 
 % Constellation Diagram
 cd = comm.ConstellationDiagram('Title', 'Locked Constellation (After Transients)');
@@ -93,8 +90,12 @@ cd = comm.ConstellationDiagram('Title', 'Locked Constellation (After Transients)
 cd(recovered_I(2000:end)); 
 
 figure('Name','Input compare');
-plot(recovered_I)
+plot(recovered_I,"DisplayName", "Compensated samples", "LineWidth",1.5)
 hold on
-plot(real(rxFilter(data_upsampled))) 
+wo_freq_off = real(rxFilter(data_upsampled));
+plot(wo_freq_off(2*fls+1:end),"DisplayName", "Transmitted samples wo frequency offset", "LineWidth",1.5) 
 title('Recovered In-Phase Signal (Baseband)'); 
 xlabel('Samples'); ylabel('Amplitude'); grid on;
+ax = gca();
+ax.FontSize = 20;
+legend 
